@@ -24,16 +24,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	spamdclient "github.com/baruwa-enterprise/spamd-client/pkg"
+	"github.com/baruwa-enterprise/spamd-client/pkg/response"
+	flag "github.com/spf13/pflag"
 	"log"
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
-
-	spamdclient "github.com/baruwa-enterprise/spamd-client/pkg"
-	"github.com/baruwa-enterprise/spamd-client/pkg/request"
-	"github.com/baruwa-enterprise/spamd-client/pkg/response"
-	flag "github.com/spf13/pflag"
 )
 
 var (
@@ -72,7 +71,7 @@ func d(r *response.Response) {
 func init() {
 	cfg = &Config{}
 	cmdName = path.Base(os.Args[0])
-	flag.StringVarP(&cfg.Address, "host", "H", "192.168.1.14",
+	flag.StringVarP(&cfg.Address, "host", "H", "192.168.15.185",
 		`Specify Spamd host to connect to.`)
 	flag.IntVarP(&cfg.Port, "port", "p", 783,
 		`In TCP/IP mode, connect to spamd server listening on given port`)
@@ -114,12 +113,11 @@ func main() {
 	flag.Parse()
 	ctx := context.Background()
 	network, address := parseAddr(cfg.Address, cfg.Port)
-	ch := make(chan bool)
-	m := []byte(`Date: Mon, 23 Jun 2015 11:40:36 -0400
-From: Gopher <from@example.com>
-To: Another Gopher <to@example.com>
-Subject: Gophers at Gophercon
-Message-Id: <v0421010eb70653b14e06@[192.168.1.84]>
+	m := []byte(`Date: Mon, 23 Jun 2021 11:40:36 -0400
+From: Gopher <test@gmail.com>
+To: Another Gopher <spamtest@gmail.com>
+Subject: Gophers test spam at Gophercon
+Message-Id: <v0421010eb70653b14e06@[192.168.15.185]>
 
 Message body
 James
@@ -128,16 +126,18 @@ My Workd
 
 ++++++++++++++
 `)
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
 	go func(m []byte) {
-		defer func() {
-			ch <- true
-		}()
+		defer wg.Done()
 		c, err := spamdclient.NewClient(network, address, cfg.User, cfg.UseCompression)
 		if err != nil {
 			log.Println(err)
 			return
 		}
-		c.SetCmdTimeout(5 * time.Second)
+		c.SetCmdTimeout(30 * time.Second)
 		if cfg.UseTLS {
 			err = c.SetRootCA(cfg.RootCA)
 			if err != nil {
@@ -154,11 +154,11 @@ My Workd
 		}
 		d(r)
 	}(m)
+
+	wg.Add(1)
 	go func(m []byte) {
+		defer wg.Done()
 		c, err := spamdclient.NewClient(network, address, cfg.User, cfg.UseCompression)
-		defer func() {
-			ch <- true
-		}()
 		if err != nil {
 			log.Println("ERROR:", err)
 			return
@@ -181,11 +181,11 @@ My Workd
 		}
 		d(r)
 	}(m)
+
+	wg.Add(1)
 	go func(m []byte) {
+		defer wg.Done()
 		c, err := spamdclient.NewClient(network, address, cfg.User, cfg.UseCompression)
-		defer func() {
-			ch <- true
-		}()
 		if err != nil {
 			log.Println(err)
 			return
@@ -207,10 +207,10 @@ My Workd
 		}
 		d(r)
 	}(m)
+
+	wg.Add(1)
 	go func(m []byte) {
-		defer func() {
-			ch <- true
-		}()
+		defer wg.Done()
 		c, err := spamdclient.NewClient(network, address, cfg.User, cfg.UseCompression)
 		if err != nil {
 			log.Println(err)
@@ -233,10 +233,10 @@ My Workd
 		}
 		d(r)
 	}(m)
+
+	wg.Add(1)
 	go func(m []byte) {
-		defer func() {
-			ch <- true
-		}()
+		defer wg.Done()
 		c, err := spamdclient.NewClient(network, address, cfg.User, cfg.UseCompression)
 		if err != nil {
 			log.Println(err)
@@ -259,10 +259,10 @@ My Workd
 		}
 		d(r)
 	}(m)
+
+	wg.Add(1)
 	go func(m []byte) {
-		defer func() {
-			ch <- true
-		}()
+		defer wg.Done()
 		c, err := spamdclient.NewClient(network, address, cfg.User, cfg.UseCompression)
 		if err != nil {
 			log.Println(err)
@@ -285,49 +285,49 @@ My Workd
 		}
 		d(r)
 	}(m)
-	<-ch
-	c, err := spamdclient.NewClient(network, address, cfg.User, cfg.UseCompression)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	if cfg.UseTLS {
-		err = c.SetRootCA(cfg.RootCA)
-		if err != nil {
-			log.Println("ERROR:", err)
-			return
-		}
-		c.EnableTLS()
-	}
+	wg.Wait()
+	//c, err := spamdclient.NewClient(network, address, cfg.User, cfg.UseCompression)
+	//if err != nil {
+	//	log.Println(err)
+	//	return
+	//}
+	//if cfg.UseTLS {
+	//	err = c.SetRootCA(cfg.RootCA)
+	//	if err != nil {
+	//		log.Println("ERROR:", err)
+	//		return
+	//	}
+	//	c.EnableTLS()
+	//}
 	// c.SetConnTimeout(2 * time.Second)
 	// c.SetCmdTimeout(2 * time.Second)
 	// c.SetConnRetries(5)
-	ir := bytes.NewReader(m)
-	r, e := c.Tell(ctx, ir, request.Ham, request.LearnAction)
-	if e != nil {
-		log.Println(e)
-		return
-	}
-	d(r)
-	ir.Reset(m)
-	r, e = c.Tell(ctx, ir, request.Ham, request.ForgetAction)
-	if e != nil {
-		log.Println(e)
-		return
-	}
-	d(r)
-	ir.Reset(m)
-	r, e = c.Tell(ctx, ir, request.Spam, request.LearnAction)
-	if e != nil {
-		log.Println(e)
-		return
-	}
-	d(r)
-	ir.Reset(m)
-	r, e = c.Tell(ctx, ir, request.Spam, request.ForgetAction)
-	if e != nil {
-		log.Println(e)
-		return
-	}
-	d(r)
+	//ir := bytes.NewReader(m)
+	//r, e := c.Tell(ctx, ir, request.Ham, request.LearnAction)
+	//if e != nil {
+	//	log.Println(e)
+	//	return
+	//}
+	//d(r)
+	//ir.Reset(m)
+	//r, e = c.Tell(ctx, ir, request.Ham, request.ForgetAction)
+	//if e != nil {
+	//	log.Println(e)
+	//	return
+	//}
+	//d(r)
+	//ir.Reset(m)
+	//r, e = c.Tell(ctx, ir, request.Spam, request.LearnAction)
+	//if e != nil {
+	//	log.Println(e)
+	//	return
+	//}
+	//d(r)
+	//ir.Reset(m)
+	//r, e = c.Tell(ctx, ir, request.Spam, request.ForgetAction)
+	//if e != nil {
+	//	log.Println(e)
+	//	return
+	//}
+	//d(r)
 }

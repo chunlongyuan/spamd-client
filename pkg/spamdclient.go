@@ -475,11 +475,13 @@ func (c *Client) dial(ctx context.Context) (conn net.Conn, err error) {
 	for i := 0; i <= c.connRetries; i++ {
 		if c.useTLS && strings.HasPrefix(c.network, "tcp") {
 			conf := c.tlsConfig()
-			td := tls.Dialer{
-				NetDialer: d,
-				Config:    conf,
-			}
-			conn, err = td.DialContext(ctx, c.network, c.address)
+			//td := tls.Dialer{
+			//	NetDialer: d,
+			//	Config:    conf,
+			//}
+			//conn, err = td.DialContext(ctx, c.network, c.address)
+
+			conn, err = tls.DialWithDialer(d, c.network, c.address, conf)
 		} else {
 			conn, err = d.DialContext(ctx, c.network, c.address)
 		}
