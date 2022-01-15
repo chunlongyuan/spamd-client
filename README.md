@@ -43,6 +43,12 @@ You can import the library in your code
 import "github.com/baruwa-enterprise/spamd-client/pkg"
 ```
 
+### start spamassassin with docker-compose
+
+```
+cd docker-compose && make up
+```
+
 ### Testing
 
 ``make test``
